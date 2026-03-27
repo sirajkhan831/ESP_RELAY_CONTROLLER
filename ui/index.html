@@ -87,21 +87,37 @@
     const onRow = document.getElementById("onRow");
     const offRow = document.getElementById("offRow");
     const statusRow = document.getElementById("statusRow");
+    let cloudApplied = false;
+
+    function showOnPremiseControls() {
+      applyModeRow.classList.remove("hidden");
+      onRow.classList.remove("hidden");
+      offRow.classList.remove("hidden");
+      statusRow.classList.remove("hidden");
+    }
+
+    function hideLocalActionControls() {
+      onRow.classList.add("hidden");
+      offRow.classList.add("hidden");
+      statusRow.classList.add("hidden");
+    }
 
     async function runBat(scriptName) {
-      statusText.textContent = `Running ${scriptName}...`;
+      statusText.textContent = `Working...`;
       try {
         const res = await fetch(`/run?script=${encodeURIComponent(scriptName)}`, { method: "POST" });
         const data = await res.json();
         if (!data.ok) {
           const err = data.stderr || data.error || "Unknown error";
           statusText.textContent = `${scriptName} failed: ${err}`;
-          return;
+          return false;
         }
         const out = (data.stdout || "").trim();
-        statusText.textContent = out ? out.split("\n").slice(-1)[0] : `${scriptName} executed successfully.`;
+        statusText.textContent = out ? out.split("\n").slice(-1)[0] : `Done.`;
+        return true;
       } catch (e) {
-        statusText.textContent = `Failed to call launcher. Start run_ui.bat first.`;
+        statusText.textContent = `Failed to connect. Start run_ui.bat first.`;
+        return false;
       }
     }
 
@@ -109,24 +125,26 @@
       const isCloud = modeSelect.value === "CLOUD";
       modeText.textContent = isCloud ? "Cloud" : "On-Premise";
 
-      if (isCloud) {
-        onRow.classList.add("hidden");
-        offRow.classList.add("hidden");
-        statusRow.classList.add("hidden");
-        statusText.textContent = "Cloud mode selected. Please use the Blynk mobile app to control the light.";
+      if (isCloud && cloudApplied) {
+        hideLocalActionControls();
+        statusText.textContent = "Cloud mode is active. Please use the Blynk mobile app to control the light.";
+      } else if (isCloud) {
+        showOnPremiseControls();
+        statusText.textContent = "Cloud mode selected. Click Apply to switch to cloud mode.";
       } else {
-        onRow.classList.remove("hidden");
-        offRow.classList.remove("hidden");
-        statusRow.classList.remove("hidden");
-        statusText.textContent = "On-Premise mode selected. Use the buttons below to control the light.";
+        showOnPremiseControls();
+        statusText.textContent = "On-Premise mode is active. Use the buttons below to control the light.";
       }
     }
 
     setModeBtn.addEventListener("click", async () => {
       if (modeSelect.value === "CLOUD") {
-        await runBat("mode_cloud.bat");
+        const ok = await runBat("mode_cloud.bat");
+        cloudApplied = !!ok;
       } else {
         await runBat("mode_offline.bat");
+        cloudApplied = false;
+        showOnPremiseControls();
       }
       updateModeText();
     });
@@ -153,7 +171,12 @@
       await runBat("status_monitor.bat");
     });
 
-    modeSelect.addEventListener("change", updateModeText);
+    modeSelect.addEventListener("change", () => {
+      if (modeSelect.value !== "CLOUD") {
+        cloudApplied = false;
+      }
+      updateModeText();
+    });
     updateModeText();
   </script>
 </body>
