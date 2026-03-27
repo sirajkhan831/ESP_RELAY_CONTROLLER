@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ESP8266 Relay Control</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f6f8;
+      color: #1f2937;
+      margin: 20px;
+    }
+    .page {
+      max-width: 520px;
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    h1 { margin: 0 0 6px; font-size: 1.4rem; }
+    p { margin: 0 0 14px; color: #4b5563; }
+    .row { margin-bottom: 10px; }
+    label { display: block; margin-bottom: 4px; font-size: 0.92rem; }
+    select, button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      font-size: 0.95rem;
+    }
+    button {
+      background: #2563eb;
+      color: #ffffff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-green { background: #16a34a; }
+    .btn-red { background: #dc2626; }
+    .btn-gray { background: #4b5563; }
+    .small { font-size: 0.85rem; color: #6b7280; margin-top: 4px; }
+    #modeText { font-weight: 700; }
+    #statusText { margin-top: 10px; font-size: 0.95rem; color: #1f2937; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>ESP8266 Relay Control</h1>
+    <p>Simple control page for school demo.</p>
+
+    <div class="row">
+      <label for="modeSelect">Select Mode</label>
+      <select id="modeSelect">
+        <option value="ON_PREMISE" selected>On-Premise</option>
+        <option value="CLOUD">Cloud</option>
+      </select>
+      <div class="small">Current mode: <span id="modeText">On-Premise</span></div>
+    </div>
+
+    <div class="row" id="applyModeRow">
+      <button id="setModeBtn">Apply Selected Mode</button>
+    </div>
+
+    <div class="row" id="onRow">
+      <button id="onBtn" class="btn-green">Turn ON</button>
+    </div>
+    <div class="row" id="offRow">
+      <button id="offBtn" class="btn-red">Turn OFF</button>
+    </div>
+    <div class="row" id="statusRow">
+      <button id="statusBtn" class="btn-gray">Open Status (Serial Monitor)</button>
+    </div>
+    <div id="statusText">Ready.</div>
+  </div>
+
+  <script>
+    const modeSelect = document.getElementById("modeSelect");
+    const modeText = document.getElementById("modeText");
+    const setModeBtn = document.getElementById("setModeBtn");
+    const onBtn = document.getElementById("onBtn");
+    const offBtn = document.getElementById("offBtn");
+    const statusBtn = document.getElementById("statusBtn");
+    const statusText = document.getElementById("statusText");
+    const applyModeRow = document.getElementById("applyModeRow");
+    const onRow = document.getElementById("onRow");
+    const offRow = document.getElementById("offRow");
+    const statusRow = document.getElementById("statusRow");
+
+    async function runBat(scriptName) {
+      statusText.textContent = `Running ${scriptName}...`;
+      try {
+        const res = await fetch(`/run?script=${encodeURIComponent(scriptName)}`, { method: "POST" });
+        const data = await res.json();
+        if (!data.ok) {
+          const err = data.stderr || data.error || "Unknown error";
+          statusText.textContent = `${scriptName} failed: ${err}`;
+          return;
+        }
+        const out = (data.stdout || "").trim();
+        statusText.textContent = out ? out.split("\n").slice(-1)[0] : `${scriptName} executed successfully.`;
+      } catch (e) {
+        statusText.textContent = `Failed to call launcher. Start run_ui.bat first.`;
+      }
+    }
+
+    function updateModeText() {
+      const isCloud = modeSelect.value === "CLOUD";
+      modeText.textContent = isCloud ? "Cloud" : "On-Premise";
+
+      if (isCloud) {
+        onRow.classList.add("hidden");
+        offRow.classList.add("hidden");
+        statusRow.classList.add("hidden");
+        statusText.textContent = "Cloud mode selected. Please use the Blynk mobile app to control the light.";
+      } else {
+        onRow.classList.remove("hidden");
+        offRow.classList.remove("hidden");
+        statusRow.classList.remove("hidden");
+        statusText.textContent = "On-Premise mode selected. Use the buttons below to control the light.";
+      }
+    }
+
+    setModeBtn.addEventListener("click", async () => {
+      if (modeSelect.value === "CLOUD") {
+        await runBat("mode_cloud.bat");
+      } else {
+        await runBat("mode_offline.bat");
+      }
+      updateModeText();
+    });
+
+    onBtn.addEventListener("click", async () => {
+      if (modeSelect.value === "CLOUD") {
+        statusText.textContent = "Cloud mode selected. Please use the Blynk mobile app to turn the light ON.";
+        return;
+      } else {
+        await runBat("light_on.bat");
+      }
+    });
+
+    offBtn.addEventListener("click", async () => {
+      if (modeSelect.value === "CLOUD") {
+        statusText.textContent = "Cloud mode selected. Please use the Blynk mobile app to turn the light OFF.";
+        return;
+      } else {
+        await runBat("light_off.bat");
+      }
+    });
+
+    statusBtn.addEventListener("click", async () => {
+      await runBat("status_monitor.bat");
+    });
+
+    modeSelect.addEventListener("change", updateModeText);
+    updateModeText();
+  </script>
+</body>
+</html>
